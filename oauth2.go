@@ -90,7 +90,7 @@ func GetAuthorizeURL(oauth SpotifyOauth) (string, error) {
 		parameters.Add("scope", oauth.Scope)
 	}
 	if oauth.State != "" {
-		parameters.Add("status", oauth.State)
+		parameters.Add("state", oauth.State)
 	}
 	Url.RawQuery = parameters.Encode()
 
@@ -107,7 +107,7 @@ func GetAccessToken(code string, oauth SpotifyOauth) (Token, error) {
 		parameters.Add("scope", oauth.Scope)
 	}
 	if oauth.State != "" {
-		parameters.Add("status", oauth.State)
+		parameters.Add("state", oauth.State)
 	}
 
 	token, err := sendAccessTokenRequest(parameters, oauth)
