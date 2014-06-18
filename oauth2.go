@@ -4,6 +4,7 @@ package gotify
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -38,7 +39,11 @@ func (t Token) isExpired() bool {
 	return true
 }
 
-// TODO: TEST
+func (t *Token) stringer() string {
+	return fmt.Sprintf("{AccessToken: %s, TokenType: %s, ExpiresAt: %s, RefreshToken: %s, TTL: %s}", t.AccessToken, t.TokenType, t.ExpiresAt, t.RefreshToken, string(t.TTL))
+}
+
+// Reads a cached token
 func GetCachedToken(oauth SpotifyOauth) (Token, error) {
 	var token Token
 	var err error
@@ -49,9 +54,9 @@ func GetCachedToken(oauth SpotifyOauth) (Token, error) {
 			if err == nil {
 				if token.isExpired() {
 					token, err = RefreshAccessToken(token.RefreshToken, oauth)
-					if err == nil {
-						return token, nil
-					}
+				}
+				if err == nil {
+					return token, nil
 				}
 			}
 		}
@@ -59,14 +64,13 @@ func GetCachedToken(oauth SpotifyOauth) (Token, error) {
 	return Token{}, err
 }
 
-// TOOO: TEST
-func SaveTokenInfo(token Token, oauth SpotifyOauth) error {
+func saveTokenInfo(token Token, oauth SpotifyOauth) error {
 	var err error
 	if oauth.CachePath != "" {
 		marshaledToken, err := json.Marshal(token)
 		if err == nil {
+			err := ioutil.WriteFile(oauth.CachePath, marshaledToken, 0x777)
 			return nil
-			ioutil.WriteFile(oauth.CachePath, marshaledToken, 0x777)
 		}
 	}
 	return err
@@ -81,7 +85,7 @@ func GetAuthorizeURL(oauth SpotifyOauth) (string, error) {
 		parameters := url.Values{}
 		parameters.Add("client_id", oauth.ClientId)
 		parameters.Add("response_type", "code")
-		parameters.Add("redirect_url", oauth.RedirectUri)
+		parameters.Add("redirect_uri", oauth.RedirectUri)
 		if oauth.Scope != "" {
 			parameters.Add("scope", oauth.Scope)
 		}
@@ -94,23 +98,18 @@ func GetAuthorizeURL(oauth SpotifyOauth) (string, error) {
 	return "", err
 }
 
-// TODO: TEST
+// Takes the authorization code and a SpotifyOauth
+// Returns an access token
 func GetAccessToken(code string, oauth SpotifyOauth) (Token, error) {
 	var err error
 	parameters := url.Values{}
 	parameters.Add("redirect_uri", oauth.RedirectUri)
 	parameters.Add("code", code)
 	parameters.Add("grant_type", "authorization_code")
-	if oauth.Scope != "" {
-		parameters.Add("scope", oauth.Scope)
-	}
-	if oauth.State != "" {
-		parameters.Add("state", oauth.State)
-	}
 
 	token, err := sendAccessTokenRequest(parameters, oauth)
 	if err == nil {
-		err = SaveTokenInfo(token, oauth)
+		err = saveTokenInfo(token, oauth)
 		if err == nil {
 			return token, nil
 		}
@@ -127,11 +126,10 @@ func RefreshAccessToken(refreshToken string, oauth SpotifyOauth) (Token, error) 
 
 	token, err := sendAccessTokenRequest(parameters, oauth)
 	if err == nil {
-
 		if token.RefreshToken == "" {
 			token.RefreshToken = refreshToken
 		}
-		err = SaveTokenInfo(token, oauth)
+		err = saveTokenInfo(token, oauth)
 		if err == nil {
 			return token, nil
 		}
@@ -142,21 +140,21 @@ func RefreshAccessToken(refreshToken string, oauth SpotifyOauth) (Token, error) 
 func sendAccessTokenRequest(parameters url.Values, oauth SpotifyOauth) (Token, error) {
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", OauthTokenUrl, strings.NewReader(parameters.Encode()))
-	if err != nil {
-		return Token{}, err
-	}
-	req.SetBasicAuth(oauth.ClientId, oauth.ClientSecret)
-	resp, err := client.Do(req)
 	if err == nil {
-		if resp.StatusCode == http.StatusOK {
-			var token Token
-			err = json.NewDecoder(resp.Body).Decode(token)
-			if err == nil {
-				token.ExpiresAt = time.Now().Add(time.Duration(token.TTL) * time.Second)
-				return token, nil
+		req.SetBasicAuth(oauth.ClientId, oauth.ClientSecret)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		resp, err := client.Do(req)
+		if err == nil {
+			if resp.StatusCode == http.StatusOK {
+				var token Token
+				err = json.NewDecoder(resp.Body).Decode(&token)
+				if err == nil {
+					token.ExpiresAt = time.Now().Add(time.Duration(token.TTL) * time.Second)
+					return token, nil
+				}
+			} else {
+				err = errors.New(resp.Status)
 			}
-		} else {
-			err = errors.New(resp.Status)
 		}
 	}
 	return Token{}, err

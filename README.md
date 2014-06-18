@@ -8,5 +8,3 @@ Todo: Add instructions here
 ## Quick start
 Todo: Add instruction here
 
-## Version
-0.01a - Initial commit, oauth implemented but not tested.
