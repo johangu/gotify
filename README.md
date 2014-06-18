@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Gotify - a Go client for the Spotify API
 
 This is my first attempt at using Go, so I'm sure there are lots of things that could have been written differently, please feel free to let me know.
@@ -16,4 +15,3 @@ gotify
 ======
 
 A Go client for the Spotify API
->>>>>>> 27840d5f3383de100332529fc2978ae7b2944590
