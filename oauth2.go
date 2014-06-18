@@ -4,7 +4,6 @@ package gotify
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -39,10 +38,6 @@ func (t Token) isExpired() bool {
 	return true
 }
 
-func (t *Token) stringer() string {
-	return fmt.Sprintf("{AccessToken: %s, TokenType: %s, ExpiresAt: %s, RefreshToken: %s, TTL: %s}", t.AccessToken, t.TokenType, t.ExpiresAt, t.RefreshToken, string(t.TTL))
-}
-
 // Reads a cached token
 func GetCachedToken(oauth SpotifyOauth) (Token, error) {
 	var token Token
@@ -62,18 +57,6 @@ func GetCachedToken(oauth SpotifyOauth) (Token, error) {
 		}
 	}
 	return Token{}, err
-}
-
-func saveTokenInfo(token Token, oauth SpotifyOauth) error {
-	var err error
-	if oauth.CachePath != "" {
-		marshaledToken, err := json.Marshal(token)
-		if err == nil {
-			err := ioutil.WriteFile(oauth.CachePath, marshaledToken, 0x777)
-			return nil
-		}
-	}
-	return err
 }
 
 // Takes a SpotifyOauth struct and returns the appropriate AuthorizeUrl for
@@ -118,7 +101,6 @@ func GetAccessToken(code string, oauth SpotifyOauth) (Token, error) {
 }
 
 // Refreshes an expired AccessToken
-// TODO: TEST
 func RefreshAccessToken(refreshToken string, oauth SpotifyOauth) (Token, error) {
 	parameters := url.Values{}
 	parameters.Add("refresh_token", refreshToken)
@@ -135,6 +117,18 @@ func RefreshAccessToken(refreshToken string, oauth SpotifyOauth) (Token, error) 
 		}
 	}
 	return Token{}, err
+}
+
+// Parses the response code from from the query string when user is redirected
+// back to the application
+func ParseResponseCode(response string) (string, error) {
+	u, err := url.Parse(response)
+	if err != nil {
+		return "", err
+	}
+	q, _ := url.ParseQuery(u.RawQuery)
+	code := q["code"][0]
+	return code, nil
 }
 
 func sendAccessTokenRequest(parameters url.Values, oauth SpotifyOauth) (Token, error) {
@@ -160,14 +154,14 @@ func sendAccessTokenRequest(parameters url.Values, oauth SpotifyOauth) (Token, e
 	return Token{}, err
 }
 
-// Parses the response code from from the query string when user is redirected
-// back to the application
-func ParseResponseCode(response string) (string, error) {
-	u, err := url.Parse(response)
-	if err != nil {
-		return "", err
+func saveTokenInfo(token Token, oauth SpotifyOauth) error {
+	var err error
+	if oauth.CachePath != "" {
+		marshaledToken, err := json.Marshal(token)
+		if err == nil {
+			err = ioutil.WriteFile(oauth.CachePath, marshaledToken, 0x777)
+			return nil
+		}
 	}
-	q, _ := url.ParseQuery(u.RawQuery)
-	code := q["code"][0]
-	return code, nil
+	return err
 }
