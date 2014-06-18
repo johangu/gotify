@@ -9,9 +9,4 @@ Todo: Add instructions here
 Todo: Add instruction here
 
 ## Version
-- 0.01a - Initial commit, oauth implemented but not tested.
-=======
-gotify
-======
-
-A Go client for the Spotify API
+0.01a - Initial commit, oauth implemented but not tested.
