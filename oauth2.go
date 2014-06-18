@@ -32,45 +32,44 @@ type Token struct {
 }
 
 func (t Token) isExpired() bool {
-	if int(time.Since(t.ExpiresAt)) >= 0 {
-		return true
+	if !(int(time.Since(t.ExpiresAt)) >= 0) {
+		return false
 	}
-	return false
+	return true
 }
 
 // TODO: TEST
 func GetCachedToken(oauth SpotifyOauth) (Token, error) {
 	var token Token
+	var err error
 	if oauth.CachePath != "" {
 		cachedData, err := ioutil.ReadFile(oauth.CachePath)
-		if err != nil {
-			return Token{}, err
-		}
-		err = json.Unmarshal(cachedData, &token)
-		if err != nil {
-			return Token{}, err
-		}
-
-		if token.isExpired() {
-			token, err = RefreshAccessToken(token.RefreshToken, oauth)
-			if err != nil {
-				return Token{}, err
+		if err == nil {
+			err = json.Unmarshal(cachedData, &token)
+			if err == nil {
+				if token.isExpired() {
+					token, err = RefreshAccessToken(token.RefreshToken, oauth)
+					if err == nil {
+						return token, nil
+					}
+				}
 			}
 		}
 	}
-	return token, nil
+	return Token{}, err
 }
 
 // TOOO: TEST
 func SaveTokenInfo(token Token, oauth SpotifyOauth) error {
+	var err error
 	if oauth.CachePath != "" {
 		marshaledToken, err := json.Marshal(token)
-		if err != nil {
-			return err
+		if err == nil {
+			return nil
+			ioutil.WriteFile(oauth.CachePath, marshaledToken, 0x777)
 		}
-		ioutil.WriteFile(oauth.CachePath, marshaledToken, 0x777)
 	}
-	return nil
+	return err
 }
 
 // Takes a SpotifyOauth struct and returns the appropriate AuthorizeUrl for
@@ -78,27 +77,26 @@ func SaveTokenInfo(token Token, oauth SpotifyOauth) error {
 func GetAuthorizeURL(oauth SpotifyOauth) (string, error) {
 	var Url *url.URL
 	Url, err := url.Parse(OauthAuthorizeURL)
-	if err != nil {
-		return "", err
+	if err == nil {
+		parameters := url.Values{}
+		parameters.Add("client_id", oauth.ClientId)
+		parameters.Add("response_type", "code")
+		parameters.Add("redirect_url", oauth.RedirectUri)
+		if oauth.Scope != "" {
+			parameters.Add("scope", oauth.Scope)
+		}
+		if oauth.State != "" {
+			parameters.Add("state", oauth.State)
+		}
+		Url.RawQuery = parameters.Encode()
+		return Url.String(), nil
 	}
-
-	parameters := url.Values{}
-	parameters.Add("client_id", oauth.ClientId)
-	parameters.Add("response_type", "code")
-	parameters.Add("redirect_url", oauth.RedirectUri)
-	if oauth.Scope != "" {
-		parameters.Add("scope", oauth.Scope)
-	}
-	if oauth.State != "" {
-		parameters.Add("state", oauth.State)
-	}
-	Url.RawQuery = parameters.Encode()
-
-	return Url.String(), nil
+	return "", err
 }
 
 // TODO: TEST
 func GetAccessToken(code string, oauth SpotifyOauth) (Token, error) {
+	var err error
 	parameters := url.Values{}
 	parameters.Add("redirect_uri", oauth.RedirectUri)
 	parameters.Add("code", code)
@@ -111,14 +109,13 @@ func GetAccessToken(code string, oauth SpotifyOauth) (Token, error) {
 	}
 
 	token, err := sendAccessTokenRequest(parameters, oauth)
-	if err != nil {
-		return Token{}, err
+	if err == nil {
+		err = SaveTokenInfo(token, oauth)
+		if err == nil {
+			return token, nil
+		}
 	}
-	err = SaveTokenInfo(token, oauth)
-	if err != nil {
-		return Token{}, err
-	}
-	return token, nil
+	return Token{}, err
 }
 
 // Refreshes an expired AccessToken
@@ -129,19 +126,17 @@ func RefreshAccessToken(refreshToken string, oauth SpotifyOauth) (Token, error) 
 	parameters.Add("grant_type", "refresh_token")
 
 	token, err := sendAccessTokenRequest(parameters, oauth)
-	if err != nil {
-		return Token{}, err
-	}
+	if err == nil {
 
-	if token.RefreshToken == "" {
-		token.RefreshToken = refreshToken
+		if token.RefreshToken == "" {
+			token.RefreshToken = refreshToken
+		}
+		err = SaveTokenInfo(token, oauth)
+		if err == nil {
+			return token, nil
+		}
 	}
-	err = SaveTokenInfo(token, oauth)
-	if err != nil {
-		return Token{}, err
-	}
-
-	return token, nil
+	return Token{}, err
 }
 
 func sendAccessTokenRequest(parameters url.Values, oauth SpotifyOauth) (Token, error) {
@@ -152,20 +147,19 @@ func sendAccessTokenRequest(parameters url.Values, oauth SpotifyOauth) (Token, e
 	}
 	req.SetBasicAuth(oauth.ClientId, oauth.ClientSecret)
 	resp, err := client.Do(req)
-	if err != nil {
-		return Token{}, err
+	if err == nil {
+		if resp.StatusCode == http.StatusOK {
+			var token Token
+			err = json.NewDecoder(resp.Body).Decode(token)
+			if err == nil {
+				token.ExpiresAt = time.Now().Add(time.Duration(token.TTL) * time.Second)
+				return token, nil
+			}
+		} else {
+			err = errors.New(resp.Status)
+		}
 	}
-	if resp.StatusCode != http.StatusOK {
-		return Token{}, errors.New(resp.Status)
-	}
-	var token Token
-	err = json.NewDecoder(resp.Body).Decode(token)
-	if err != nil {
-		return Token{}, err
-	}
-	token.ExpiresAt = time.Now().Add(time.Duration(token.TTL) * time.Second)
-
-	return token, nil
+	return Token{}, err
 }
 
 // Parses the response code from from the query string when user is redirected
