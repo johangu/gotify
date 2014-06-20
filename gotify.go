@@ -45,7 +45,6 @@ func call(call string, verb string, params url.Values, token Token) (string, err
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token.AccessToken))
 		resp, err = client.Do(req)
 		defer resp.Body.Close()
-		fmt.Println(resp.Request)
 		if err == nil {
 			if resp.StatusCode == http.StatusOK {
 				tmp, err := ioutil.ReadAll(resp.Body)
