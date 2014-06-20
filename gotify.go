@@ -42,7 +42,6 @@ func call(call string, verb string, parameters url.Values, token Token) (string,
 				tmp, err := ioutil.ReadAll(resp.Body)
 				if err == nil {
 					body = string(tmp)
-					fmt.Println(body)
 					return body, nil
 				}
 			} else {
