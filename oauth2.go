@@ -46,13 +46,11 @@ func GetCachedToken(oauth SpotifyOauth) (Token, error) {
 		cachedData, err := ioutil.ReadFile(oauth.CachePath)
 		if err == nil {
 			err = json.Unmarshal(cachedData, &token)
+			if token.isExpired() {
+				token, err = RefreshAccessToken(token.RefreshToken, oauth)
+			}
 			if err == nil {
-				if token.isExpired() {
-					token, err = RefreshAccessToken(token.RefreshToken, oauth)
-				}
-				if err == nil {
-					return token, nil
-				}
+				return token, nil
 			}
 		}
 	}
@@ -138,6 +136,7 @@ func sendAccessTokenRequest(parameters url.Values, oauth SpotifyOauth) (Token, e
 		req.SetBasicAuth(oauth.ClientId, oauth.ClientSecret)
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		resp, err := client.Do(req)
+		defer resp.Body.Close()
 		if err == nil {
 			if resp.StatusCode == http.StatusOK {
 				var token Token
